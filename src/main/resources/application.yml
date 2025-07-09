@@ -15,7 +15,7 @@ spring:
       bindings:
         claims-out:
           destination: insurance-claims
-          content-type: applica tion/json
+          content-type: application/json
           producer:
             partition-key-expression: headers['kafka_messageKey']
             partition-count: 3
