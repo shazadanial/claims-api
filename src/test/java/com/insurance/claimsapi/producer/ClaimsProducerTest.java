@@ -1,44 +1,82 @@
-// claims-api/src/main/java/com/insurance/claimsapi/producer/ClaimsProducerTest.java
 package com.insurance.claimsapi.producer;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.insurance.claimsapi.model.InsuranceClaim;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cloud.stream.function.StreamBridge;
-import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.Message;
-import org.springframework.messaging.support.MessageBuilder;
-import org.springframework.stereotype.Component;
 
-@Slf4j
-@Component
-@RequiredArgsConstructor
-public class ClaimsProducerTest {
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-    private final StreamBridge streamBridge;
+@ExtendWith(MockitoExtension.class)
+class ClaimsProducerTest {
 
-    public boolean sendClaim(Object claim, String claimId, String claimType) {
-        try {
-            log.info("Sending claim {} of type {} to partition", claimId, claimType);
+    @Mock
+    private StreamBridge streamBridge;
 
-            // Create message with claimType as partition key
-            Message<Object> message = MessageBuilder
-                    .withPayload(claim)
-                    .setHeader(KafkaHeaders.KEY, claimType)
-                    .build();
+    @InjectMocks
+    private ClaimsProducer claimsProducer;
 
-            boolean sent = streamBridge.send("claims-out", message);
+    @Test
+    void shouldSendClaimSuccessfully() {
+        // Given
+        InsuranceClaim claim = InsuranceClaim.builder()
+                .claimId("TEST-001")
+                .claimType("AUTO")
+                .claimAmount(5000.0)
+                .customerName("Test Customer")
+                .build();
 
-            if (sent) {
-                log.info("Claim {} (type: {}) sent successfully", claimId, claimType);
-                return true;
-            } else {
-                log.error("Failed to send claim {} (type: {})", claimId, claimType);
-                return false;
-            }
+        when(streamBridge.send(eq("claims-out"), any(Message.class)))
+                .thenReturn(true);
 
-        } catch (Exception e) {
-            log.error("Exception sending claim {} (type: {})", claimId, claimType, e);
-            return false;
-        }
+        // When
+        boolean result = claimsProducer.sendClaim(claim, "TEST-001", "AUTO");
+
+        // Then
+        assertTrue(result);
+        verify(streamBridge).send(eq("claims-out"), any(Message.class));
+    }
+
+    @Test
+    void shouldHandleSendFailure() {
+        // Given
+        InsuranceClaim claim = InsuranceClaim.builder()
+                .claimId("TEST-002")
+                .claimType("HEALTH")
+                .claimAmount(1200.0)
+                .build();
+
+        when(streamBridge.send(eq("claims-out"), any(Message.class)))
+                .thenReturn(false);
+
+        // When
+        boolean result = claimsProducer.sendClaim(claim, "TEST-002", "HEALTH");
+
+        // Then
+        assertFalse(result);
+    }
+
+    @Test
+    void shouldHandleException() {
+        // Given
+        InsuranceClaim claim = InsuranceClaim.builder()
+                .claimId("TEST-003")
+                .claimType("PROPERTY")
+                .build();
+
+        when(streamBridge.send(any(), any()))
+                .thenThrow(new RuntimeException("Kafka connection failed"));
+
+        // When
+        boolean result = claimsProducer.sendClaim(claim, "TEST-003", "PROPERTY");
+
+        // Then
+        assertFalse(result);
     }
 }

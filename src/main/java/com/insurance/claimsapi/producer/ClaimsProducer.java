@@ -20,9 +20,7 @@ public class ClaimsProducer {
                     .withPayload(claim)
                     .setHeader(KafkaHeaders.KEY, claimType)
                     .build();
-
             boolean sent = streamBridge.send("claims-out", message);
-
             if (sent) {
                 log.info("Claim {} (type: {}) sent successfully", claimId, claimType);
                 return true;
